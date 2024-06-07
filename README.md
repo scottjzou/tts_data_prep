@@ -15,13 +15,24 @@ $ brew install ffmpeg
 $ pip install requirements.txt
 ```
 
-## Minimal start for creating the dataset
+## Prep
+find the video you wanted on youtube, make sure it has a high quality subtitle
+
+find the subtitle via 
+```bash
+yt-dlp --list-subs    https://www.youtube.com/watch\?v\=Q6YvsrGILrw
+# output
+# Language       Name                             Formats
+# en-dQs7zDoAYDs English - PostTV Closed Captions vtt, ttml, srv3, srv2, srv1, json3
+
+#use the listed language to download both video and subtitles
+yt-dlp -x -f bestaudio --write-subs --sub-langs "en-dQs7zDoAYDs" --audio-format wav --sub-format vtt https://www.youtube.com/watch\?v\=Q6YvsrGILrw              
+```bash
+## Generation
 
 ```python
 from youtube_tts_data_generator import YTSpeechDataGenerator
-
 # First create a YTSpeechDataGenerator instance:
-
 generator = YTSpeechDataGenerator(dataset_name='elon')
 
 # Now create a '.txt' file that contains a list of YouTube videos that contains speeches.
