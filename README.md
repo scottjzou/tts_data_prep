@@ -10,6 +10,9 @@ A python library to generate speech dataset. Youtube Speech Data Generator also 
 
 ## Installation
 Make sure [ffmpeg](https://ffmpeg.org/download.html#get-packages) is installed and is set to the system path.
+```bash
+$ brew install ffmpeg
+```bash
 
 ```bash
 $ pip install youtube-tts-data-generator

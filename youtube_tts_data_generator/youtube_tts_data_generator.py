@@ -200,7 +200,7 @@ class YTSpeechDataGenerator(object):
         self.root = os.getcwd()
         self.prep_dir = os.path.join(self.root, self.name + "_prep")
         self.dest_dir = os.path.join(self.root, self.name)
-        self.download_dir = os.path.join(self.prep_dir, "downloaded")
+        self.download_dir = download_dir
         self.split_dir = os.path.join(self.prep_dir, "split")
         self.concat_dir = os.path.join(self.prep_dir, "concatenated")
         self.filenames_txt = os.path.join(self.download_dir, "files.txt")
@@ -285,92 +285,6 @@ class YTSpeechDataGenerator(object):
             if trans[ix]["text"] not in  ["[Music]", "[applause]", "(Applause.)"] 
         ]
 
-    def download(self, links_txt):
-        """
-        Downloads YouTube Videos as wav files.
-
-        Parameters:
-              links_txt: A .txt file that contains list of
-                         youtube video urls separated by new line.
-        """
-        self.text_path = os.path.join(self.root, links_txt)
-        if os.path.exists(self.text_path) and os.path.isfile(self.text_path):
-
-            links = open(os.path.join(self.text_path)).read().strip().split("\n")
-
-            if os.path.getsize(self.text_path) > 0:
-                for ix in range(len(links)):
-                    link = links[ix]
-                    video_id = self.get_video_id(link)
-
-                    if video_id != []:
-                        filename = f"{self.name}{ix+1}.mp4"
-                        wav_file = filename.replace(".mp4", ".wav")
-                        self.ydl_opts["outtmpl"] = os.path.join(
-                            self.download_dir, filename
-                        )
-
-                        with yt_dlp.YoutubeDL(self.ydl_opts) as ydl:
-                            try:
-                                trans = (
-                                    YouTubeTranscriptApi.list_transcripts(video_id)
-                                    .find_transcript([self.dataset_lang])
-                                    .fetch()
-                                )
-                                trans = self.fix_json_trans(trans)
-                                json_formatted = (
-                                    self.transcript_formatter.format_transcript(
-                                        trans, ensure_ascii=False, indent=2
-                                    )
-                                )
-                                open(
-                                    os.path.join(
-                                        self.download_dir,
-                                        wav_file.replace(
-                                            ".wav", f".{self.dataset_lang}.json"
-                                        ),
-                                    ),
-                                    "w",
-                                ).write(json_formatted)
-                                ydl.download([link])
-                                print(
-                                    "Completed downloading "
-                                    + wav_file
-                                    + " from "
-                                    + link
-                                )
-                                self.wav_counter += 1
-                                self.wav_filenames.append(wav_file)
-                            except (TranscriptsDisabled, NoTranscriptFound):
-                                warnings.warn(
-                                    f"WARNING - video {link} does not have subtitles. Skipping..",
-                                    NoSubtitleWarning,
-                                )
-
-                        del self.ydl_opts["outtmpl"]
-                    else:
-                        warnings.warn(
-                            f"WARNING - video {link} does not seem to be a valid YouTube url. Skipping..",
-                            InvalidURLWarning,
-                        )
-                if self.wav_filenames != []:
-                    with open(self.filenames_txt, "w") as f:
-                        lines = "filename,subtitle,trim_mins_begin,trim_mins_end\n"
-                        for wav in self.wav_filenames:
-                            lines += f"{wav},{wav.replace('.wav','')}.{self.dataset_lang}.json,0,0\n"
-                        f.write(lines)
-                    print(f"Completed downloading audios to '{self.download_dir}'")
-                    print(f"You can find files data in '{self.filenames_txt}'")
-                else:
-                    warnings.warn(
-                        f"WARNING - No video with subtitles found to create dataset.",
-                        NoSubtitleWarning,
-                    )
-
-            else:
-                raise Exception(f"ERROR - File '{links_txt}' is empty")
-        else:
-            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), links_txt)
 
     def convert_time(self, seconds):
         seconds = seconds % (24 * 3600)
@@ -797,9 +711,8 @@ class YTSpeechDataGenerator(object):
 
     def prepare_dataset(
         self,
-        links_txt,
         sr=22050,
-        download_youtube_data=True,
+        download_dir,
         max_concat_limit=7,
         concat_count=2,
         min_audio_length=5,
@@ -812,26 +725,19 @@ class YTSpeechDataGenerator(object):
           concat_audios
           finalize_dataset
 
-        Downloads YouTube Videos as wav files(optional),
+        Use downloaded as wav files(optional),
         splits the audios into chunks, joins the
         junks into reasonable audios and trims silence
         from the audios. Creates a metadata file as csv/json
         after the dataset has been generated.
 
         Parameters:
-              links_txt: A .txt file that contains list of
-                         youtube video urls separated by new line.
-
-              download_youtube_data: Weather to download data from
-                                     Youtube.
 
               min_audio_length: The minimum length of audio files.
 
               max_audio_length: The maximum length of audio files.
         """
         self.sr = sr
-        if download_youtube_data:
-            self.download(links_txt)
-        self.split_audios()
+        self.split_audios(download_dir)
         self.concat_audios(max_concat_limit, concat_count)
         self.finalize_dataset(min_audio_length, max_audio_length)
