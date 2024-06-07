@@ -263,7 +263,7 @@ class YTSpeechDataGenerator(object):
             return []
 
     @staticmethod
-    def fix_json_trans(cls, trans):
+    def fix_json_trans(trans):
         return [
             {
                 "start": trans[ix]["start"],
@@ -281,8 +281,8 @@ class YTSpeechDataGenerator(object):
             if trans[ix]["text"] not in ["[Music]", "[applause]", "(Applause.)"]
         ]
 
-
-    def convert_time(self, seconds):
+    @staticmethod
+    def convert_time(seconds):
         seconds = seconds % (24 * 3600)
         hour = seconds // 3600
         seconds %= 3600
@@ -292,7 +292,7 @@ class YTSpeechDataGenerator(object):
         return "%d:%02d:%02d" % (hour, minutes, seconds)
 
     @staticmethod
-    def parse_time(cls, time_string):
+    def parse_time(time_string):
         hours = int(re.findall(r"(\d+):\d+:\d+,\d+", time_string)[0])
         minutes = int(re.findall(r"\d+:(\d+):\d+,\d+", time_string)[0])
         seconds = int(re.findall(r"\d+:\d+:(\d+),\d+", time_string)[0])
@@ -301,7 +301,7 @@ class YTSpeechDataGenerator(object):
         return (hours * 3600 + minutes * 60 + seconds) * 1000 + milliseconds
 
     @staticmethod
-    def parse_srt(cls, srt_string):
+    def parse_srt(srt_string):
         # Original : https://github.com/pgrabovets/srt-to-json
         srt_list = []
 
@@ -319,8 +319,8 @@ class YTSpeechDataGenerator(object):
                     end_time_string = re.findall(
                         r"\d+:\d+:\d+,\d+ --> (\d+:\d+:\d+,\d+)", line
                     )[0]
-                    start_time = cls.parse_time(start_time_string)
-                    end_time = cls.parse_time(end_time_string)
+                    start_time = YTSpeechDataGenerator.parse_time(start_time_string)
+                    end_time = YTSpeechDataGenerator.parse_time(end_time_string)
 
                     srt_list.append(
                         {
@@ -360,7 +360,7 @@ class YTSpeechDataGenerator(object):
                         mode="r",
                         encoding="utf-8",
                     ).read()
-                    caption_json = self.parse_srt(file_contents.strip())
+                    caption_json = YTSpeechDataGenerator.parse_srt(file_contents.strip())
                 elif subtitle.lower().endswith(".srt"):
                     tqdm.write(f"Detected SRT captions. Converting to json..")
                     file_contents = open(
@@ -368,7 +368,7 @@ class YTSpeechDataGenerator(object):
                         mode="r",
                         encoding="utf-8",
                     ).read()
-                    caption_json = self.parse_srt(file_contents.strip())
+                    caption_json = YTSpeechDataGenerator.parse_srt(file_contents.strip())
                 elif subtitle.lower().endswith(".json"):
                     pass
                 else:
