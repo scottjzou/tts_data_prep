@@ -10,4 +10,4 @@ numba>=0.48
 inflect
 numpy>=1.14.0
 unidecode>=0.4.20
-vtt_to_srt3==0.1.8.9
+vtt_to_srt3>=0.2.0.1

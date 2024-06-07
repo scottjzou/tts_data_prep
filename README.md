@@ -1,12 +1,7 @@
 # Youtube Speech Data Generator
 
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://en.wikipedia.org/wiki/MIT_License)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-<a href="https://pepy.tech/project/youtube-tts-data-generator">
-    <img alt="Downloads" src="https://pepy.tech/badge/youtube-tts-data-generator">
-</a>
-
-A python library to generate speech dataset. Youtube Speech Data Generator also takes care of almost all your speech data preprocessing needed to build a speech dataset along with their transcriptions making sure it follows a directory structure followed by most of the text-to-speech architectures.
+A python library to generate speech dataset based on downloaded youtube audio and subtitles.
+Forked and improved based on https://github.com/hetpandya/youtube_tts_data_generator/ which is outdated
 
 ## Installation
 Make sure [ffmpeg](https://ffmpeg.org/download.html#get-packages) is installed and is set to the system path.
@@ -32,13 +27,11 @@ yt-dlp -x -f bestaudio --write-subs --sub-langs "en-dQs7zDoAYDs" --audio-format 
 
 ```python
 from youtube_tts_data_generator import YTSpeechDataGenerator
-# First create a YTSpeechDataGenerator instance:
-generator = YTSpeechDataGenerator(dataset_name='elon')
+# First create a YTSpeechDataGenerator instance with download_dir pointed to downloaded audio and subtitles:
+# make sure a files.txt that links audio with associated subtitles is present in the directory
+generator = YTSpeechDataGenerator(dataset_name='elon', download_dir='path-to-downloaded-wav-and-vtt')
 
-# Now create a '.txt' file that contains a list of YouTube videos that contains speeches.
-# NOTE - Make sure you choose videos with subtitles.
-
-generator.prepare_dataset('links.txt')
+generator.prepare_dataset()
 # The above will take care about creating your dataset, creating a metadata file and trimming silence from the audios.
 
 ```
@@ -57,8 +50,23 @@ generator.prepare_dataset('links.txt')
         │   └───wavs
         └───your_dataset_prep
             ├───concatenated
-            ├───downloaded
             └───split
+        ```
+    - *download_dir*: 
+      - The path where your audio and subtitles are stored
+         ```
+         └───download_dir
+            ├───audio.wav
+            ├───audio.vtt
+            └───files.txt
+         ```
+      - a files.txt must be present so that the generator can parse files correctly
+      - 'files.txt' should follow the following format:
+      
+        ```
+        filename,subtitle,trim_min_begin,trim_min_end
+        audio.wav,subtitle.srt,0,0
+        audio2.wav,subtitle.vtt,5,6
         ```
     - *output_type*: 
       - The type of the metadata to be created after the dataset has been generated.
@@ -84,21 +92,6 @@ generator.prepare_dataset('links.txt')
       - Default value is set to *22050*
  
 - Methods:
-  - download():
-    - Downloads video files from YouTube along with their subtitles and saves them as wav files.
-    - Parameters:
-      - *links_txt*:
-        - Path to the '.txt' file that contains the urls for the videos.
-    - Usage of this method is optional. If you do not use this method, make sure to place all the audio and subtitle files in 'your_dataset_prep/downloaded' directory. 
-    - Then, create a file called 'files.txt' and again place it under 'your_dataset_prep/downloaded'.
-      'files.txt' should follow the following format:
-      ```
-      filename,subtitle,trim_min_begin,trim_min_end
-      audio.wav,subtitle.srt,0,0
-      audio2.wav,subtitle.vtt,5,6
-      ```
-    - Create a '.txt' file that contains a list of YouTube videos that contains speeches.
-    - Example - ```generator.download('links.txt')```
   - split_audios():
     - This method splits all the wav files into smaller chunks according to the duration of the text in the subtitles.
     - Saves transcriptions as '.txt' file for each of the chunks.
@@ -133,14 +126,9 @@ generator.prepare_dataset('links.txt')
     - A wrapper method for *download()*,*split_audios()*,*concat_audios()* and *finalize_dataset()*.
     - If you do not wish to use the above methods, you can directly call *prepare_dataset()*. It will handle all your data generation.
     - Parameters:
-      - *links_txt*:
-        - Path to the '.txt' file that contains the urls for the videos.
       - *sr*:
         - Sample Rate to keep of the audios.
         - Default value is set to *22050*  
-      - *download_youtube_data*:
-        - Whether to download audios from YouTube.
-        - Default value is *True*
       - *max_concat_limit*: 
         - The upper limit of length of the audios that should be concated. The rest will be kept as they are.
         - The default value is set to *7*
@@ -153,9 +141,7 @@ generator.prepare_dataset('links.txt')
       - *max_audio_length*:
         - The maximum length of the speech that should be kept. The rest will be ignored.
         - The default value is set set to *14*.        
-    - Example - ```generator.prepare_dataset(links_txt='links.txt',
-                                             download_youtube_data=True,
-                                             min_audio_length=6)```
+    - Example - ```generator.prepare_dataset(min_audio_length=6)```
 <!--te-->
 
 ## Final dataset structure
@@ -170,10 +156,3 @@ your_dataset
 │    └───your_dataset2.wav
 └───metadata.csv/alignment.json
 ```
-
-NOTE - `audio.py` is highly based on [Real Time Voice Cloning](https://github.com/CorentinJ/Real-Time-Voice-Cloning/blob/master/encoder/audio.py)
-
-## References
-[SRT to JSON](https://github.com/pgrabovets/srt-to-json)
-
-*Read more about the library [here](https://medium.com/@TheHetPandya/creating-your-own-text-to-speech-dataset-from-youtube-f1177845b12e)*

@@ -72,6 +72,7 @@ class YTSpeechDataGenerator(object):
     def __init__(
         self,
         dataset_name,
+        download_dir,
         output_type="csv",
         keep_audio_extension=False,
         lang="en",
@@ -216,11 +217,9 @@ class YTSpeechDataGenerator(object):
 
         if not os.path.exists(self.prep_dir):
             print(f"Creating directory '{self.name}_prep'..")
-            print(f"Creating directory '{self.name}_prep/downloaded'")
             print(f"Creating directory '{self.name}_prep/split'")
             print(f"Creating directory '{self.name}_prep/concatenated'")
             os.mkdir(self.prep_dir)
-            os.mkdir(self.download_dir)
             os.mkdir(self.split_dir)
             os.mkdir(self.concat_dir)
 
@@ -263,7 +262,8 @@ class YTSpeechDataGenerator(object):
         else:
             return []
 
-    def fix_json_trans(self, trans):
+    @staticmethod
+    def fix_json_trans(cls, trans):
         return [
             {
                 "start": trans[ix]["start"],
@@ -277,7 +277,8 @@ class YTSpeechDataGenerator(object):
                 "text": trans[ix]["text"],
             }
             for ix in range(len(trans))
-            if trans[ix]["text"] not in  ["[Music]", "[applause]", "(Applause.)"] 
+            # add more filter based on your subtitle
+            if trans[ix]["text"] not in ["[Music]", "[applause]", "(Applause.)"]
         ]
 
 
@@ -290,7 +291,8 @@ class YTSpeechDataGenerator(object):
 
         return "%d:%02d:%02d" % (hour, minutes, seconds)
 
-    def parse_time(self, time_string):
+    @staticmethod
+    def parse_time(cls, time_string):
         hours = int(re.findall(r"(\d+):\d+:\d+,\d+", time_string)[0])
         minutes = int(re.findall(r"\d+:(\d+):\d+,\d+", time_string)[0])
         seconds = int(re.findall(r"\d+:\d+:(\d+),\d+", time_string)[0])
@@ -298,7 +300,8 @@ class YTSpeechDataGenerator(object):
 
         return (hours * 3600 + minutes * 60 + seconds) * 1000 + milliseconds
 
-    def parse_srt(self, srt_string):
+    @staticmethod
+    def parse_srt(cls, srt_string):
         # Original : https://github.com/pgrabovets/srt-to-json
         srt_list = []
 
@@ -306,7 +309,7 @@ class YTSpeechDataGenerator(object):
             if line:
                 try:
                     line.split("\n")
-                    index = int(re.match(r"\d+", line).group())
+                    _ = int(re.match(r"\d+", line).group())
 
                     pos = re.search(r"\d+:\d+:\d+,\d+ --> \d+:\d+:\d+,\d+", line).end() + 1
                     content = line[pos:]
@@ -316,8 +319,8 @@ class YTSpeechDataGenerator(object):
                     end_time_string = re.findall(
                         r"\d+:\d+:\d+,\d+ --> (\d+:\d+:\d+,\d+)", line
                     )[0]
-                    start_time = self.parse_time(start_time_string)
-                    end_time = self.parse_time(end_time_string)
+                    start_time = cls.parse_time(start_time_string)
+                    end_time = cls.parse_time(end_time_string)
 
                     srt_list.append(
                         {
@@ -630,7 +633,7 @@ class YTSpeechDataGenerator(object):
         concat_audios = [
             wav for wav in os.listdir(self.concat_dir) if wav.endswith(".wav")
         ]
-        concat_txt = [wav.replace(".wav", ".txt") for wav in concat_audios]
+        _ = [wav.replace(".wav", ".txt") for wav in concat_audios]
 
         filtered_audios = []
         filtered_txts = []
@@ -643,14 +646,14 @@ class YTSpeechDataGenerator(object):
             trimmed_length = silence_removed.shape[0] / sr
             audio_lens.append(trimmed_length)
 
-            # if (
-            #     trimmed_length >= min_audio_length
-            #     and trimmed_length <= max_audio_length
-            # ):
-            self.len_dataset += trimmed_length
-            sf.write(os.path.join(self.dest_dir, "wavs", audio), silence_removed, sr, 'PCM_24')
-            filtered_audios.append(audio)
-            filtered_txts.append(audio.replace(".wav", ".txt"))
+            if (
+                trimmed_length >= min_audio_length
+                and trimmed_length <= max_audio_length
+            ):
+                self.len_dataset += trimmed_length
+                sf.write(os.path.join(self.dest_dir, "wavs", audio), silence_removed, sr, 'PCM_24')
+                filtered_audios.append(audio)
+                filtered_txts.append(audio.replace(".wav", ".txt"))
 
         self.len_shortest_audio = min(audio_lens)
         self.len_longest_audio = max(audio_lens)
@@ -707,7 +710,6 @@ class YTSpeechDataGenerator(object):
     def prepare_dataset(
         self,
         sr=22050,
-        download_dir,
         max_concat_limit=7,
         concat_count=2,
         min_audio_length=5,
@@ -715,7 +717,6 @@ class YTSpeechDataGenerator(object):
     ):
         """
         A wrapper method for:
-          download
           split_audios
           concat_audios
           finalize_dataset
@@ -733,6 +734,6 @@ class YTSpeechDataGenerator(object):
               max_audio_length: The maximum length of audio files.
         """
         self.sr = sr
-        self.split_audios(download_dir)
+        self.split_audios()
         self.concat_audios(max_concat_limit, concat_count)
         self.finalize_dataset(min_audio_length, max_audio_length)
