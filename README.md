@@ -39,7 +39,7 @@ generator.prepare_dataset()
 ## Usage
 <!--ts-->
 - Initializing the generator:
-  ```generator = YTSpeechDataGenerator(dataset_name='your_dataset',lang='en')```
+  ```generator = YTSpeechDataGenerator(dataset_name='elon', download_dir='path-to-downloaded-wav-and-vtt')```
   - Parameters:
     - *dataset_name*: 
       - The name of the dataset you'd like to give. 
@@ -60,8 +60,8 @@ generator.prepare_dataset()
             ├───audio.vtt
             └───files.txt
          ```
-      - a files.txt must be present so that the generator can parse files correctly
-      - 'files.txt' should follow the following format:
+      - a 'files.txt' must be present so that the generator can parse files correctly
+      - the 'files.txt' should follow the following format:
       
         ```
         filename,subtitle,trim_min_begin,trim_min_end
