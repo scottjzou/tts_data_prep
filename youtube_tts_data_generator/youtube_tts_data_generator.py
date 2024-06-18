@@ -341,175 +341,178 @@ class YTSpeechDataGenerator(object):
         if os.path.exists(self.filenames_txt) and os.path.isfile(self.filenames_txt):
             files_list = open(self.filenames_txt).read().strip().split("\n")
             files_list = files_list[1:]
-            check_ffmpeg = subprocess.run(
-                ["ffmpeg"], stderr=subprocess.STDOUT, stdout=subprocess.PIPE
-            )
+            try:
+                check_ffmpeg = subprocess.run(
+                    ["ffmpeg"], stderr=subprocess.STDOUT, stdout=subprocess.PIPE
+                )
 
-            files_pbar = tqdm(files_list)
-            for line in files_pbar:
-                filename, subtitle, trim_min_begin, trim_min_end = line.split(",")
-                caption_json = None
-                out_filename = filename.replace(".wav", ".json")
-                files_pbar.set_description("Processing %s" % filename)
-                if subtitle.lower().endswith(".vtt"):
-                    tqdm.write(f"Detected VTT captions. Converting to json..")
-                    ConvertFile(os.path.join(self.download_dir, subtitle), "utf-8").convert()
-                    file_contents = open(
-                        os.path.join(self.download_dir, subtitle[:-3] + 'srt'),
-                        mode="r",
-                        encoding="utf-8",
-                    ).read()
-                    caption_json = YTSpeechDataGenerator.parse_srt(file_contents.strip())
-                elif subtitle.lower().endswith(".srt"):
-                    tqdm.write(f"Detected SRT captions. Converting to json..")
-                    file_contents = open(
-                        os.path.join(self.download_dir, subtitle),
-                        mode="r",
-                        encoding="utf-8",
-                    ).read()
-                    caption_json = YTSpeechDataGenerator.parse_srt(file_contents.strip())
-                elif subtitle.lower().endswith(".json"):
-                    pass
-                else:
-                    raise Exception(
-                        "Invalid subtitle type. Supported subtitle types are 'vtt'/'srt'"
-                    )
-                if caption_json:
-                    caption_json = self.fix_json_trans(caption_json)
-                    open(
-                        os.path.join(self.download_dir, out_filename),
-                        "w",
-                        encoding="utf-8",
-                    ).write(json.dumps(caption_json, indent=2, sort_keys=True))
-                    tqdm.write(
-                        f"Writing json captions for {filename} to '{out_filename}'."
-                    )
-                trim_min_end = int(trim_min_end)
-                trim_min_begin = int(trim_min_begin)
-                filename = filename[:-4]
-                cnt = 0
-                if not caption_json:
-                    with open(
-                        os.path.join(self.download_dir, subtitle)
-                    ) as json_cap:
-                        captions = json.loads(json_cap.read())
-                else:
-                    captions = caption_json
-                for ix in range(len(captions)):
-                    cap = captions[ix]
-                    text = cap["text"]
-                    start = cap["start"]
-                    end = cap["end"]
-
-                    t = datetime.strptime(
-                        self.convert_time(start), "%H:%M:%S"
-                    ).time()
-                    if trim_min_end > 0:
-
-                        t2 = datetime.strptime(
-                            self.convert_time(end), "%H:%M:%S"
-                        ).time()
-
-                        if (
-                            t.minute >= trim_min_begin
-                            and t2.minute <= trim_min_end
-                            and text != "\n"
-                        ):
-                            text = " ".join(text.split('\n"'))
-                            text.replace("--", "")
-                            text.replace('"', "")
-
-                            new_name = filename + "-" + str(cnt)
-
-                            cmd = [
-                                "ffmpeg",
-                                "-i",
-                                f"{os.path.join(self.download_dir,filename)}.wav",
-                                "-ss",
-                                str(start),
-                                "-to",
-                                str(end),
-                                "-c",
-                                "copy",
-                                f"{os.path.join(self.split_dir,new_name)}.wav",
-                            ]
-
-                            call = subprocess.run(cmd, stderr=subprocess.STDOUT)
-
-                            with open(
-                                os.path.join(self.split_dir, new_name + ".txt"), "w"
-                            ) as f:
-                                f.write(text)
+                files_pbar = tqdm(files_list)
+                for line in files_pbar:
+                    filename, subtitle, trim_min_begin, trim_min_end = line.split(",")
+                    caption_json = None
+                    out_filename = filename.replace(".wav", ".json")
+                    files_pbar.set_description("Processing %s" % filename)
+                    if subtitle.lower().endswith(".vtt"):
+                        tqdm.write(f"Detected VTT captions. Converting to json..")
+                        file_contents = open(
+                            os.path.join(self.download_dir, subtitle),
+                            mode="r",
+                            encoding="utf-8",
+                        ).read()
+                        srt = convert_content(file_contents)
+                        caption_json = YTSpeechDataGenerator.parse_srt(srt.strip())
+                    elif subtitle.lower().endswith(".srt"):
+                        tqdm.write(f"Detected SRT captions. Converting to json..")
+                        file_contents = open(
+                            os.path.join(self.download_dir, subtitle),
+                            mode="r",
+                            encoding="utf-8",
+                        ).read()
+                        caption_json = YTSpeechDataGenerator.parse_srt(file_contents.strip())
+                    elif subtitle.lower().endswith(".json"):
+                        pass
                     else:
-                        if t.minute >= trim_min_begin and text != "\n":
-                            text = " ".join(text.split("\n"))
-                            new_name = filename + "-" + str(cnt)
+                        raise Exception(
+                            "Invalid subtitle type. Supported subtitle types are 'vtt'/'srt'"
+                        )
+                    if caption_json:
+                        caption_json = self.fix_json_trans(caption_json)
+                        open(
+                            os.path.join(self.download_dir, out_filename),
+                            "w",
+                            encoding="utf-8",
+                        ).write(json.dumps(caption_json, indent=2, sort_keys=True))
+                        tqdm.write(
+                            f"Writing json captions for {filename} to '{out_filename}'."
+                        )
+                    trim_min_end = int(trim_min_end)
+                    trim_min_begin = int(trim_min_begin)
+                    filename = filename[:-4]
+                    cnt = 0
+                    if not caption_json:
+                        with open(
+                            os.path.join(self.download_dir, subtitle)
+                        ) as json_cap:
+                            captions = json.loads(json_cap.read())
+                    else:
+                        captions = caption_json
+                    for ix in range(len(captions)):
+                        cap = captions[ix]
+                        text = cap["text"]
+                        start = cap["start"]
+                        end = cap["end"]
 
-                            cmd = [
-                                "ffmpeg",
-                                "-i",
-                                f"{os.path.join(self.download_dir,filename)}.wav",
-                                "-ss",
-                                str(start),
-                                "-to",
-                                str(end),
-                                "-c",
-                                "copy",
-                                f"{os.path.join(self.split_dir,new_name)}.wav",
-                            ]
+                        t = datetime.strptime(
+                            self.convert_time(start), "%H:%M:%S"
+                        ).time()
+                        if trim_min_end > 0:
 
-                            call = subprocess.run(cmd, stderr=subprocess.STDOUT)
+                            t2 = datetime.strptime(
+                                self.convert_time(end), "%H:%M:%S"
+                            ).time()
 
-                            with open(
-                                os.path.join(self.split_dir, new_name + ".txt"), "w"
-                            ) as f:
-                                f.write(text)
-                    cnt += 1
+                            if (
+                                t.minute >= trim_min_begin
+                                and t2.minute <= trim_min_end
+                                and text != "\n"
+                            ):
+                                text = " ".join(text.split("\n"))
+
+                                new_name = filename + "-" + str(cnt)
+
+                                cmd = [
+                                    "ffmpeg",
+                                    "-i",
+                                    f"{os.path.join(self.download_dir,filename)}.wav",
+                                    "-ss",
+                                    str(start),
+                                    "-to",
+                                    str(end),
+                                    "-c",
+                                    "copy",
+                                    f"{os.path.join(self.split_dir,new_name)}.wav",
+                                ]
+
+                                call = subprocess.run(cmd, stderr=subprocess.STDOUT)
+
+                                with open(
+                                    os.path.join(self.split_dir, new_name + ".txt"), "w"
+                                ) as f:
+                                    f.write(text)
+                        else:
+                            if t.minute >= trim_min_begin and text != "\n":
+                                text = " ".join(text.split("\n"))
+                                new_name = filename + "-" + str(cnt)
+
+                                cmd = [
+                                    "ffmpeg",
+                                    "-i",
+                                    f"{os.path.join(self.download_dir,filename)}.wav",
+                                    "-ss",
+                                    str(start),
+                                    "-to",
+                                    str(end),
+                                    "-c",
+                                    "copy",
+                                    f"{os.path.join(self.split_dir,new_name)}.wav",
+                                ]
+
+                                call = subprocess.run(cmd, stderr=subprocess.STDOUT)
+
+                                with open(
+                                    os.path.join(self.split_dir, new_name + ".txt"), "w"
+                                ) as f:
+                                    f.write(text)
+                        cnt += 1
 
                 tqdm.write(
                     f"Completed splitting audios and texts to '{self.split_dir}'"
                 )
 
-            files_pbar = tqdm(files_list)
+                files_pbar = tqdm(files_list)
 
-            tqdm.write(f"Verifying split audios and their transcriptions. {files_pbar}")
+                tqdm.write(f"Verifying split audios and their transcriptions.")
 
-            df = []
-            for name in files_pbar:
-                filename, subtitle, trim_min_begin, trim_min_end = line.split(",")
-                files_pbar.set_description("Processing %s" % filename)
-                fname = filename[:-4]
-                files = os.listdir(self.split_dir)
-                for ix in range(len(files)):
-                    current_file = fname + "-" + str(ix) + ".txt"
-                    current_wav = current_file.replace(".txt", ".wav")
-                    try:
-                        current_text = (
-                            open(os.path.join(self.split_dir, current_file))
-                            .read()
-                            .strip('-"')
-                        )
+                df = []
+                for name in files_pbar:
+                    filename, subtitle, trim_min_begin, trim_min_end = line.split(",")
+                    files_pbar.set_description("Processing %s" % filename)
+                    fname = filename[:-4]
+                    files = os.listdir(self.split_dir)
+                    for ix in range(len(files)):
+                        current_file = fname + "-" + str(ix) + ".txt"
+                        current_wav = current_file.replace(".txt", ".wav")
+                        try:
+                            current_text = (
+                                open(os.path.join(self.split_dir, current_file))
+                                .read()
+                                .strip()
+                            )
 
-                        wav, sr = librosa.load(
-                            os.path.join(self.split_dir, current_wav)
-                        )
-                        length = wav.shape[0] / sr
+                            wav, sr = librosa.load(
+                                os.path.join(self.split_dir, current_wav)
+                            )
+                            length = wav.shape[0] / sr
 
-                        if current_text != "" and length > 1:
-                            df.append([current_wav, current_text, round(length, 2)])
-                    except:
-                        pass
+                            if current_text != "" and length > 1:
+                                df.append([current_wav, current_text, round(length, 2)])
+                        except:
+                            pass
 
-            df = pd.DataFrame(
-                df, columns=["wav_file_name", "transcription", "length"]
-            )
-            df.drop_duplicates()
-            df.to_csv(self.split_audios_csv, sep="|", mode='a', index=None)
+                df = pd.DataFrame(
+                    df, columns=["wav_file_name", "transcription", "length"]
+                )
+                df.to_csv(self.split_audios_csv, sep="|", index=None)
 
-            tqdm.write(
-                f"Completed verifying audios and their transcriptions in '{self.split_dir}'."
-            )
-            tqdm.write(f"You can find files data in '{self.split_audios_csv}'")
+                tqdm.write(
+                    f"Completed verifying audios and their transcriptions in '{self.split_dir}'."
+                )
+                tqdm.write(f"You can find files data in '{self.split_audios_csv}'")
+
+            except FileNotFoundError:
+                print(
+                    "ERROR - Could not locate ffmpeg. Please install ffmpeg and add it to the environment."
+                )
         else:
             print(
                 f"ERROR - Couldn't find file 'files.txt'. Make sure it is placed in {self.download_dir}"
