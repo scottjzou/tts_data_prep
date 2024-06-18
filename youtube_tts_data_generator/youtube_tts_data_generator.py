@@ -360,7 +360,7 @@ class YTSpeechDataGenerator(object):
                             mode="r",
                             encoding="utf-8",
                         ).read()
-                        caption_json = YTSpeechDataGenerator.parse_srt(file_contents.strip)
+                        caption_json = YTSpeechDataGenerator.parse_srt(file_contents.strip())
                     elif subtitle.lower().endswith(".srt"):
                         tqdm.write(f"Detected SRT captions. Converting to json..")
                         file_contents = open(
@@ -403,12 +403,12 @@ class YTSpeechDataGenerator(object):
                         end = cap["end"]
 
                         t = datetime.strptime(
-                            self.convert_time(start), "%H:%M:%S"
+                            YTSpeechDataGenerator.convert_time(start), "%H:%M:%S"
                         ).time()
                         if trim_min_end > 0:
 
                             t2 = datetime.strptime(
-                                self.convert_time(end), "%H:%M:%S"
+                                YTSpeechDataGenerator.convert_time(end), "%H:%M:%S"
                             ).time()
 
                             if (
@@ -543,7 +543,7 @@ class YTSpeechDataGenerator(object):
             tqdm.write(f"Processing audios shorter than {self.min_audio_length} seconds..")
             for ix in tqdm(range(0, filtered_df.shape[0], concat_count)):
                 current_audio = filtered_df.iloc[ix][0]
-                print(f"short {current_audio} {ix}")
+                print(f"short {current_audio} {name_ix}")
                 text = filtered_df.iloc[ix][1]
                 try:
                     combined_sounds += AudioSegment.from_wav(
@@ -555,7 +555,7 @@ class YTSpeechDataGenerator(object):
                 try:
                     for count_ix in range(ix + 1, ix + concat_count):
                         next_audio = filtered_df.iloc[count_ix][0]
-                        print(f"short 2 {next_audio} {ix}")
+                        print(f"short 2 {next_audio} {name_ix}")
                         combined_sounds += AudioSegment.from_wav(
                             os.path.join(self.split_dir, next_audio)
                         )
