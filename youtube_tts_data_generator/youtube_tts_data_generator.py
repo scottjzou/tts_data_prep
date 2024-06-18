@@ -354,13 +354,13 @@ class YTSpeechDataGenerator(object):
                     files_pbar.set_description("Processing %s" % filename)
                     if subtitle.lower().endswith(".vtt"):
                         tqdm.write(f"Detected VTT captions. Converting to json..")
+                        ConvertFile(os.path.join(self.download_dir, subtitle), "utf-8").convert()
                         file_contents = open(
                             os.path.join(self.download_dir, subtitle),
                             mode="r",
                             encoding="utf-8",
                         ).read()
-                        srt = convert_content(file_contents)
-                        caption_json = YTSpeechDataGenerator.parse_srt(srt.strip())
+                        caption_json = YTSpeechDataGenerator.parse_srt(file_contents.strip)
                     elif subtitle.lower().endswith(".srt"):
                         tqdm.write(f"Detected SRT captions. Converting to json..")
                         file_contents = open(
@@ -502,6 +502,7 @@ class YTSpeechDataGenerator(object):
                 df = pd.DataFrame(
                     df, columns=["wav_file_name", "transcription", "length"]
                 )
+                df.drop_duplicates()
                 df.to_csv(self.split_audios_csv, sep="|", index=None)
 
                 tqdm.write(
