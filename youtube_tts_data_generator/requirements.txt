@@ -11,3 +11,4 @@ inflect
 numpy>=1.14.0
 unidecode>=0.4.20
 vtt_to_srt3>=0.2.0.1
+youtube_transcript_api
