@@ -656,9 +656,7 @@ def split_audios(self):
                 and trimmed_length <= max_audio_length
             ):
                 self.len_dataset += trimmed_length
-                librosa.output.write_wav(
-                    os.path.join(self.dest_dir, "wavs", audio), silence_removed, sr
-                )
+                sf.write(os.path.join(self.dest_dir, "wavs", audio), silence_removed, sr, 'PCM_24')
                 filtered_audios.append(audio)
                 filtered_txts.append(audio.replace(".wav", ".txt"))
 
@@ -716,7 +714,6 @@ def split_audios(self):
 
     def prepare_dataset(
         self,
-        links_txt,
         sr=22050,
         download_youtube_data=True,
         max_concat_limit=7,
@@ -726,31 +723,22 @@ def split_audios(self):
     ):
         """
         A wrapper method for:
-          download
           split_audios
           concat_audios
           finalize_dataset
 
-        Downloads YouTube Videos as wav files(optional),
+        Use downloaded YouTube Videos as wav files(optional),
         splits the audios into chunks, joins the
         junks into reasonable audios and trims silence
         from the audios. Creates a metadata file as csv/json
         after the dataset has been generated.
 
         Parameters:
-              links_txt: A .txt file that contains list of
-                         youtube video urls separated by new line.
-
-              download_youtube_data: Weather to download data from
-                                     Youtube.
-
               min_audio_length: The minimum length of audio files.
 
               max_audio_length: The maximum length of audio files.
         """
         self.sr = sr
-        if download_youtube_data:
-            self.download(links_txt)
         self.split_audios()
         self.concat_audios(max_concat_limit, concat_count)
         self.finalize_dataset(min_audio_length, max_audio_length)
