@@ -195,6 +195,7 @@ class YTSpeechDataGenerator(object):
         self.dest_dir = os.path.join(self.root, self.name)
         self.download_dir = download_dir
         self.split_dir = os.path.join(self.prep_dir, "split")
+        self.concat_dir = os.path.join(self.prep_dir, "concatenated")
         self.filenames_txt = os.path.join(self.download_dir, "files.txt")
         self.split_audios_csv = os.path.join(self.split_dir, "split.csv")
         self.len_dataset = 0
@@ -212,8 +213,10 @@ class YTSpeechDataGenerator(object):
         if not os.path.exists(self.prep_dir):
             print(f"Creating directory '{self.name}_prep'..")
             print(f"Creating directory '{self.name}_prep/split'")
+            print(f"Creating directory '{self.name}_prep/concatenated'")
             os.mkdir(self.prep_dir)
             os.mkdir(self.split_dir)
+            os.mkdir(self.concat_dir)
 
         if not os.path.exists(self.dest_dir):
             print(f"Creating directory '{self.name}'..")
@@ -510,6 +513,86 @@ class YTSpeechDataGenerator(object):
                 errno.ENOENT, os.strerror(errno.ENOENT), "files.txt"
             )
 
+    def concat_audios(self, concat_count=5):
+        """
+        Joins the chunk of audio files into
+        audios of recognizable length.
+        """
+        if os.path.exists(self.split_audios_csv) and os.path.isfile(
+            self.split_audios_csv
+        ):
+            tqdm.write(f"Reading audio data from 'split.csv'.")
+            df = pd.read_csv(self.split_audios_csv, sep="|")
+            filtered_df = df[df["length"] <= self.min_audio_length]
+            long_audios = df[df["length"] > self.min_audio_length]
+            print(filtered_df)
+            print(long_audios)
+
+            name_ix = 0
+            tqdm.write(f"Processing audios shorter than {max_limit} seconds..")
+            for ix in tqdm(range(0, filtered_df.shape[0], 2)):
+                current_audio = filtered_df.iloc[ix][0]
+                print(f"short {current_audio} {ix}")
+                text = filtered_df.iloc[ix][1]
+                combined_sounds = AudioSegment.from_wav(
+                    os.path.join(self.split_dir, current_audio)
+                )
+                combined_sounds += sound1
+                try:
+                    for count_ix in range(ix + 1, ix + concat_count):
+                        next_audio = filtered_df.iloc[count_ix][0]
+                        print(f"short 2 {next_audio} {ix}")
+                        sound2 = AudioSegment.from_wav(
+                            os.path.join(self.split_dir, next_audio)
+                        )
+                        text += " " + filtered_df.iloc[count_ix][1]
+                        combined_sounds += sound2
+
+                except IndexError:
+                    print("IndexError, "+ix)
+                finally:
+                    text = text.strip()
+                    new_name = f"{self.name}-{name_ix}"
+                    combined_sounds.set_frame_rate(self.sr)
+                    combined_sounds.export(
+                        os.path.join(self.concat_dir, new_name + ".wav"), format="wav"
+                    )
+                    with open(
+                        os.path.join(self.concat_dir, new_name + ".txt"), "w"
+                    ) as f:
+                        f.write(text)
+                    name_ix += 1
+
+            tqdm.write(f"Processing audios longer than {max_limit} seconds..")
+
+            for ix in tqdm(range(0, long_audios.shape[0])):
+                current_audio = filtered_df.iloc[ix][0]
+                print(f"long {current_audio} {ix}")
+                text = filtered_df.iloc[ix][1].strip()
+                new_name = f"{self.name}-{name_ix}"
+                combined_sounds = AudioSegment.from_wav(
+                    os.path.join(self.split_dir, current_audio)
+                )
+                combined_sounds.set_frame_rate(self.sr)
+                combined_sounds.export(
+                    os.path.join(self.concat_dir, new_name + ".wav"), format="wav"
+                )
+                with open(os.path.join(self.concat_dir, new_name + ".txt"), "w") as f:
+                    f.write(text)
+                name_ix += 1
+
+            tqdm.write(
+                f"Completed concatenating audios and their transcriptions in '{self.concat_dir}'."
+            )
+        else:
+            tqdm.write(
+                f"ERROR - Couldn't find file 'split.csv'. Make sure it is placed in {self.split_dir}"
+            )
+            raise FileNotFoundError(
+                errno.ENOENT, os.strerror(errno.ENOENT), "split.csv"
+            )
+
+
     def get_total_audio_length(self):
         """
         Returns the total number of preprocessed audio
@@ -527,17 +610,17 @@ class YTSpeechDataGenerator(object):
         and creates a medatada file in csv/json format.
         """
         tqdm.write(f"Trimming silence from audios in '{self.split_dir}'.")
-        split_audios = [
-            wav for wav in os.listdir(self.split_dir) if wav.endswith(".wav")
+        concat_dir = [
+            wav for wav in os.listdir(self.concat_dir) if wav.endswith(".wav")
         ]
-        _ = [wav.replace(".wav", ".txt") for wav in split_audios]
+        _ = [wav.replace(".wav", ".txt") for wav in concat_dir]
 
         filtered_audios = []
         filtered_txts = []
         audio_lens = []
 
-        for ix in tqdm(range(len(split_audios))):
-            audio = split_audios[ix]
+        for ix in tqdm(range(len(concat_dir))):
+            audio = concat_dir[ix]
             wav, sr = librosa.load(os.path.join(self.split_dir, audio))
             silence_removed = preprocess_wav(wav)
             trimmed_length = silence_removed.shape[0] / sr
@@ -601,7 +684,6 @@ class YTSpeechDataGenerator(object):
     def prepare_dataset(
         self,
         sr=22050,
-        concat_count=2,
         min_audio_length=7,
         max_audio_length=30,
     ):
@@ -626,4 +708,5 @@ class YTSpeechDataGenerator(object):
         self.max_audio_length = max_audio_length
         self.sr = sr
         self.split_audios()
+        self.concat_audios()
         self.finalize_dataset()
