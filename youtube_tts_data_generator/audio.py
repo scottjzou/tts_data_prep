@@ -48,8 +48,8 @@ def preprocess_wav(
 
     # Apply the preprocessing: normalize volume and shorten long silences
     wav = normalize_volume(wav, audio_norm_target_dBFS, increase_only=True)
-    if webrtcvad:
-        wav = trim_long_silences(wav)
+    # if webrtcvad:
+    #     wav = trim_long_silences(wav)
 
     return wav
 
