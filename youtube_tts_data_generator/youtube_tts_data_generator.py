@@ -74,7 +74,7 @@ class YTSpeechDataGenerator(object):
         keep_audio_extension=False,
         lang="en",
         sr=22050,
-        min_audio_length=10,
+        min_audio_length=5,
         max_audio_length=30,
     ):
         self.lang_map = {
@@ -356,7 +356,7 @@ class YTSpeechDataGenerator(object):
                         tqdm.write(f"Detected VTT captions. Converting to json..")
                         ConvertFile(os.path.join(self.download_dir, subtitle), "utf-8").convert()
                         file_contents = open(
-                            os.path.join(self.download_dir, subtitle),
+                            os.path.join(self.download_dir, subtitle[:-3] + 'srt'),
                             mode="r",
                             encoding="utf-8",
                         ).read()
@@ -474,7 +474,7 @@ class YTSpeechDataGenerator(object):
                 tqdm.write(f"Verifying split audios and their transcriptions.")
 
                 df = []
-                for name in files_pbar:
+                for line in files_pbar:
                     filename, subtitle, trim_min_begin, trim_min_end = line.split(",")
                     files_pbar.set_description("Processing %s" % filename)
                     fname = filename[:-4]
@@ -482,6 +482,7 @@ class YTSpeechDataGenerator(object):
                     for ix in range(len(files)):
                         current_file = fname + "-" + str(ix) + ".txt"
                         current_wav = current_file.replace(".txt", ".wav")
+                        print(current_file)
                         try:
                             current_text = (
                                 open(os.path.join(self.split_dir, current_file))
@@ -522,11 +523,25 @@ class YTSpeechDataGenerator(object):
                 errno.ENOENT, os.strerror(errno.ENOENT), "files.txt"
             )
 
+    def create_concated_audio(self, combined_sounds, text, name):
+        text = text.strip()
+        combined_sounds.set_frame_rate(self.sr)
+        combined_sounds.export(
+            os.path.join(self.concat_dir, name + ".wav"), format="wav"
+        )
+        with open(
+            os.path.join(self.concat_dir, name + ".txt"), "w"
+        ) as f:
+            f.write(text)
+        print(f"name {name} written")
+
     def concat_audios(self, concat_count=4):
         """
         Joins the chunk of audio files into
         audios of recognizable length.
         """
+        
+
         if os.path.exists(self.split_audios_csv) and os.path.isfile(
             self.split_audios_csv
         ):
@@ -539,62 +554,46 @@ class YTSpeechDataGenerator(object):
             print(long_audios)
 
             name_ix = 0
-            combined_sounds = 0
+
             tqdm.write(f"Processing audios shorter than {self.min_audio_length} seconds..")
-            for ix in tqdm(range(0, filtered_df.shape[0], concat_count)):
-                current_audio = filtered_df.iloc[ix][0]
-                print(f"short {current_audio} {name_ix}")
-                text = filtered_df.iloc[ix][1]
-                try:
-                    combined_sounds += AudioSegment.from_wav(
-                        os.path.join(self.split_dir, current_audio)
-                    )
-                except FileNotFoundError:
-                    continue
-                
-                try:
-                    for count_ix in range(ix + 1, ix + concat_count):
-                        next_audio = filtered_df.iloc[count_ix][0]
-                        print(f"short 2 {next_audio} {name_ix}")
-                        combined_sounds += AudioSegment.from_wav(
-                            os.path.join(self.split_dir, next_audio)
-                        )
-                        text += " " + filtered_df.iloc[count_ix][1]
-
-                except IndexError:
-                    print("IndexError, "+ix)
-                except FileNotFoundError:
-                    continue
-
-                finally:
-                    text = text.strip()
-                    new_name = f"{self.name}-{name_ix}"
-                    combined_sounds.set_frame_rate(self.sr)
-                    combined_sounds.export(
-                        os.path.join(self.concat_dir, new_name + ".wav"), format="wav"
-                    )
-                    with open(
-                        os.path.join(self.concat_dir, new_name + ".txt"), "w"
-                    ) as f:
-                        f.write(text)
-                    name_ix += 1
-
-            tqdm.write(f"Processing audios longer than {self.min_audio_length} seconds..")
-
-            for ix in tqdm(range(0, long_audios.shape[0])):
-                current_audio = filtered_df.iloc[ix][0]
-                print(f"long {current_audio} {ix}")
-                text = filtered_df.iloc[ix][1].strip()
-                new_name = f"{self.name}-{name_ix}"
+            file_index = 0
+            
+            while file_index < filtered_df.shape[0]:
+                current_audio = filtered_df.iloc[file_index][0]
+                print("file: " + current_audio)
+                text = filtered_df.iloc[file_index][1]
+                concat_index = 1
                 combined_sounds = AudioSegment.from_wav(
                     os.path.join(self.split_dir, current_audio)
                 )
-                combined_sounds.set_frame_rate(self.sr)
-                combined_sounds.export(
-                    os.path.join(self.concat_dir, new_name + ".wav"), format="wav"
-                )
-                with open(os.path.join(self.concat_dir, new_name + ".txt"), "w") as f:
-                    f.write(text)
+                audio_id = current_audio.split("-")[-1].strip('.wav')
+                while concat_index < concat_count:
+                    try: 
+                        # peek next audio
+                        next_audio = filtered_df.iloc[file_index + concat_index][0]
+                        next_text = filtered_df.iloc[file_index + concat_index][1]
+                        print("file: " + next_audio)
+                        next_audio_id = next_audio.split("-")[-1].strip('.wav')
+                        if int(audio_id) + 1 == int(next_audio_id):
+                            # if consecutive, add
+                            print(f"combining index: {file_index + concat_index} audio_id:{audio_id} next_audio_id:{next_audio_id}")
+                            combined_sounds += AudioSegment.from_wav(
+                                os.path.join(self.split_dir, next_audio)
+                            )
+                            audio_id = next_audio_id
+                            text += " " + next_text
+                            concat_index += 1
+                        else:
+                            # break and add the current file
+                            break
+                        
+                    except Exception:
+                        break
+                        
+                if combined_sounds:
+                    print(f"current_audio {current_audio} {audio_id} {next_audio}")
+                    self.create_concated_audio(combined_sounds, text, f"{self.name}-{name_ix}")
+                file_index += concat_index
                 name_ix += 1
 
             tqdm.write(
@@ -625,7 +624,7 @@ class YTSpeechDataGenerator(object):
         Trims silence from audio files
         and creates a medatada file in csv/json format.
         """
-        tqdm.write(f"Trimming silence from audios in '{self.split_dir}'.")
+        tqdm.write(f"Trimming silence from audios in '{self.concat_dir}'.")
         concat_dir = [
             wav for wav in os.listdir(self.concat_dir) if wav.endswith(".wav")
         ]
@@ -637,7 +636,7 @@ class YTSpeechDataGenerator(object):
 
         for ix in tqdm(range(len(concat_dir))):
             audio = concat_dir[ix]
-            wav, sr = librosa.load(os.path.join(self.split_dir, audio))
+            wav, sr = librosa.load(os.path.join(self.concat_dir, audio))
             silence_removed = preprocess_wav(wav)
             trimmed_length = silence_removed.shape[0] / sr
             audio_lens.append(trimmed_length)
@@ -650,14 +649,14 @@ class YTSpeechDataGenerator(object):
 
         for text in filtered_txts:
             shutil.copyfile(
-                os.path.join(self.split_dir, text),
+                os.path.join(self.concat_dir, text),
                 os.path.join(self.dest_dir, "txts", text),
             )
 
         trimmed = []
 
         for wav, trans in zip(filtered_audios, filtered_txts):
-            with open(os.path.join(self.split_dir, trans)) as f:
+            with open(os.path.join(self.concat_dir, trans)) as f:
                 text = f.read().strip()
             trimmed.append([wav, text])
 
@@ -706,6 +705,7 @@ class YTSpeechDataGenerator(object):
         """
         A wrapper method for:
           split_audios
+          concat_audios
           finalize_dataset
 
         Use downloaded as wav files(optional),
