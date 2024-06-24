@@ -639,6 +639,8 @@ class YTSpeechDataGenerator(object):
             wav, sr = librosa.load(os.path.join(self.concat_dir, audio))
             silence_removed = preprocess_wav(wav)
             trimmed_length = silence_removed.shape[0] / sr
+            if trimmed_length < 2:
+                continue
             audio_lens.append(trimmed_length)
 
 
